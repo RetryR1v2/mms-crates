@@ -1,2 +1,6 @@
+<1.1.1>
+- Bug Update
+- New Features now Saves the Crate in Database
+- YOU NEED TO DELETE OLD DATABASE and Update ALL Files.
 <1.1.0>
 - Initial Release

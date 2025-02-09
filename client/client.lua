@@ -3,10 +3,27 @@ local BccUtils = exports['bcc-utils'].initiate()
 local progressbar = exports.vorp_progressbar:initiate()
 local CreatedCrates = {}
 local Placed = false
+local Active = false
 
 local PlaceCrateGroup = BccUtils.Prompts:SetupPromptGroup()
 local PlaceCratePrompt = PlaceCrateGroup:RegisterPrompt(_U('PlaceCrate'), 0x760A9C6F, 1, 1, true, 'hold', {timedeventhash = 'MEDIUM_TIMED_EVENT'}) --G
 local AbortPlaceprompt = PlaceCrateGroup:RegisterPrompt(_U('AbortPlacement'), 0x27D1C284, 1, 1, true, 'hold', {timedeventhash = 'MEDIUM_TIMED_EVENT'}) --R
+
+RegisterNetEvent('mms-crates:client:LoadCrates')
+AddEventHandler('mms-crates:client:LoadCrates',function()
+    TriggerServerEvent('mms-crates:server:LoadData')
+end)
+
+Citizen.CreateThread(function()
+    Citizen.Wait(5000)
+    TriggerServerEvent('mms-crates:server:LoadData')
+end)
+
+RegisterNetEvent('vorp:SelectedCharacter')
+AddEventHandler('vorp:SelectedCharacter', function()
+    Citizen.Wait(10000)
+    TriggerServerEvent('mms-crates:server:LoadData')
+end)
 
 RegisterNetEvent('mms-crates:client:CratePlacement')
 AddEventHandler('mms-crates:client:CratePlacement',function(ThisCrateData,ItemId)
@@ -26,12 +43,17 @@ AddEventHandler('mms-crates:client:CratePlacement',function(ThisCrateData,ItemId
 
         if PlaceCratePrompt:HasCompleted() then
             CrouchAnim()
-            TriggerServerEvent('mms-crates:server:RemoveItemById',ThisCrateData,ItemId)
             Progressbar(5000,_U('PlaceItProgressbar'))
             ClearPedTasks(PlayerPedId())
             DeleteEntity(Package)
             Placed = true
-            TriggerEvent('mms-crates:client:PlaceCrateFinal',ThisCrateData,ItemId)
+            local MyPos = GetEntityCoords(PlayerPedId())
+            local PosX = MyPos.x
+            local PosY = MyPos.y
+            local PosZ = MyPos.z - 1.0
+            TriggerServerEvent('mms-crates:server:FinishCratePlacement',ThisCrateData,ItemId,PosX,PosY,PosZ)
+            Citizen.Wait(200)
+            TriggerEvent('mms-crates:client:Reload')
         end
 
         if AbortPlaceprompt:HasCompleted() then
@@ -40,6 +62,8 @@ AddEventHandler('mms-crates:client:CratePlacement',function(ThisCrateData,ItemId
             DeleteEntity(Package) break
         end
     end
+    Citizen.Wait(200)
+    Placed = false
 end)
 
 local OpenCrateGroup = BccUtils.Prompts:SetupPromptGroup()
@@ -47,41 +71,78 @@ local OpenCratePrompt = OpenCrateGroup:RegisterPrompt(_U('OpenCrate'), 0x760A9C6
 local PickupCratePrompt = OpenCrateGroup:RegisterPrompt(_U('PickUpCrate'), 0x27D1C284, 1, 1, true, 'hold', {timedeventhash = 'MEDIUM_TIMED_EVENT'}) -- R
 local DeleteCratePrompt = OpenCrateGroup:RegisterPrompt(_U('DeleteCrate'), 0x05CA7C52, 1, 1, true, 'hold', {timedeventhash = 'MEDIUM_TIMED_EVENT'}) -- Down
 
-RegisterNetEvent('mms-crates:client:PlaceCrateFinal')
-AddEventHandler('mms-crates:client:PlaceCrateFinal',function(ThisCrateData,ItemId)
-    local MyPos = GetEntityCoords(PlayerPedId())
-    print(ThisCrateData.model)
-    CrateObj = CreateObject(ThisCrateData.model, MyPos.x, MyPos.y, MyPos.z - 1.0,true,true,false)
-    SetEntityInvincible(CrateObj,true)
-    FreezeEntityPosition(CrateObj,true)
-    while Placed do
-        Citizen.Wait(3)
-
-        OpenCrateGroup:ShowGroup(_U('OpenCrateGroup'))
-
-        if OpenCratePrompt:HasCompleted() then
-            TriggerServerEvent('mms-crates:server:OpenCrate',ThisCrateData,ItemId)
+RegisterNetEvent('mms-crates:client:PlaceCrateOnStart')
+AddEventHandler('mms-crates:client:PlaceCrateOnStart',function(AllCrateData,MyCharID)
+    for h,v in ipairs(AllCrateData) do
+        if v.charidentifier == MyCharID then
+            if v.placed == 1 then
+                CrateObj = CreateObject(v.model, v.posx, v.posy, v.posz,true,true,false)
+                SetEntityInvincible(CrateObj,true)
+                FreezeEntityPosition(CrateObj,true)
+                CreatedCrates[#CreatedCrates + 1] = CrateObj
+            end
         end
-
-        if PickupCratePrompt:HasCompleted() then
-            CrouchAnim()
-            Progressbar(5000,_U('PickupThisChest'))
-            ClearPedTasks(PlayerPedId())
-            DeleteObject(CrateObj)
-            Placed = false
-            TriggerServerEvent('mms-crates:server:PickupCrate',ThisCrateData,ItemId)
-        end
-
-        if DeleteCratePrompt:HasCompleted() then
-            CrouchAnim()
-            Progressbar(5000,_U('DeleteThisChest'))
-            ClearPedTasks(PlayerPedId())
-            DeleteObject(CrateObj)
-            Placed = false
-            TriggerServerEvent('mms-crates:server:DeleteCrate',ThisCrateData,ItemId)
-        end
-
     end
+    TriggerEvent('mms-crates:client:StartPrompts',AllCrateData)
+end)
+
+RegisterNetEvent('mms-crates:client:Reload')
+AddEventHandler('mms-crates:client:Reload',function()
+    for h,v in ipairs(CreatedCrates) do
+        DeleteObject(v)
+    end
+    Active = false
+    Citizen.Wait(500)
+    TriggerServerEvent('mms-crates:server:LoadData')
+end)
+
+RegisterNetEvent('mms-crates:client:StartPrompts')
+AddEventHandler('mms-crates:client:StartPrompts',function(AllCrateData)
+    Active = true
+    while Active do
+        Citizen.Wait(3)
+    for h,v in ipairs(AllCrateData) do
+        local CratePosX = v.posx
+        local CratePosY = v.posy
+        local CratePosZ = v.posz
+        local MyPos = GetEntityCoords(PlayerPedId())
+        local Distance = GetDistanceBetweenCoords(CratePosX,CratePosY,CratePosZ,MyPos.x,MyPos.y,MyPos.z,true)
+        local CrateId = v.crateid
+        local Inventory = v.inventory
+        local Size = v.size
+        if Distance < 3 and v.placed == 1 then
+            OpenCrateGroup:ShowGroup(_U('OpenCrateGroup'))
+
+            if OpenCratePrompt:HasCompleted() then
+                TriggerServerEvent('mms-crates:server:OpenCrate',CrateId,Inventory)
+            end
+
+            if PickupCratePrompt:HasCompleted() then
+                CrouchAnim()
+                Progressbar(5000,_U('PickupThisChest'))
+                ClearPedTasks(PlayerPedId())
+                DeleteObject(CrateObj)
+                Active = false
+                TriggerServerEvent('mms-crates:server:PickupCrate',CrateId,Size)
+                Citizen.Wait(200)
+                CreatedCrates = {}
+                TriggerEvent('mms-crates:client:Reload')
+            end
+
+            if DeleteCratePrompt:HasCompleted() then
+                CrouchAnim()
+                Progressbar(5000,_U('DeleteThisChest'))
+                ClearPedTasks(PlayerPedId())
+                DeleteObject(CrateObj)
+                Placed = false
+                TriggerServerEvent('mms-crates:server:DeleteCrate',CrateId)
+                Citizen.Wait(200)
+                CreatedCrates = {}
+                TriggerEvent('mms-crates:client:Reload')
+            end
+        end
+    end
+end
 end)
 
 
@@ -115,6 +176,8 @@ end
 
 RegisterNetEvent('onResourceStop',function(resource)
     if resource == GetCurrentResourceName() then
-        
+        for h,v in ipairs(CreatedCrates) do
+            DeleteObject(v)
+        end
     end
 end)

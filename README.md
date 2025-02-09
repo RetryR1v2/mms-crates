@@ -1,6 +1,6 @@
 # mms-crates
 
-- Simular to by Backpack Script
+- Simular to my Backpack Script
 - You Can Place a Chest Fill it with Items ans Give it To Other Players
 
 # Features
@@ -9,11 +9,14 @@
 - You can Edit it In Config. ( 3 Sizes of Chests )
 - You Get Pictures and SQL File
 - Every Chest is Unique in Database
-- If You dont Pick up the chest after Fill it its Gone.
+- Crates are Saved
 
 # Changelog
 
 - 1.1.0 Initial Release Version
+- 1.1.1 Crates get Now Saved ( In case of Gamecrash )
+- Bit of Rework about the Placement Part.
+- Little Workaround of the Pickup Part.
 
 # installation 
 

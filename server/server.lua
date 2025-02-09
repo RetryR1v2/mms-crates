@@ -90,9 +90,19 @@ exports.vorp_inventory:registerUsableItem(Config.BigCrateB, function(data)
     end
 end)
 
-RegisterServerEvent('mms-crates:server:RemoveItemById',function(ThisCrateData,ItemId)
+RegisterServerEvent('mms-crates:server:FinishCratePlacement',function(ThisCrateData,ItemId,PosX,PosY,PosZ)
     local src = source
-    print('Triggered')
+    local Character = VORPcore.getUser(src).getUsedCharacter
+    local Identifier = Character.identifier
+    local MyCharID = Character.charIdentifier
+    local Name = Character.firstname .. ' ' .. Character.lastname
+    MySQL.update('UPDATE `mms_crates` SET identifier = ? WHERE crateid = ?',{Identifier, ThisCrateData.crateid})
+    MySQL.update('UPDATE `mms_crates` SET charidentifier = ? WHERE crateid = ?',{MyCharID, ThisCrateData.crateid})
+    MySQL.update('UPDATE `mms_crates` SET name = ? WHERE crateid = ?',{Name, ThisCrateData.crateid})
+    MySQL.update('UPDATE `mms_crates` SET posx = ? WHERE crateid = ?',{PosX, ThisCrateData.crateid})
+    MySQL.update('UPDATE `mms_crates` SET posy = ? WHERE crateid = ?',{PosY, ThisCrateData.crateid})
+    MySQL.update('UPDATE `mms_crates` SET posz = ? WHERE crateid = ?',{PosZ, ThisCrateData.crateid})
+    MySQL.update('UPDATE `mms_crates` SET placed = ? WHERE crateid = ?',{1, ThisCrateData.crateid})
     if not Config.LatestVORPInvetory then
         exports.vorp_inventory:subItemID(src, ItemId,nil,nil)
     else
@@ -100,57 +110,68 @@ RegisterServerEvent('mms-crates:server:RemoveItemById',function(ThisCrateData,It
     end
 end)
 
-RegisterServerEvent('mms-crates:server:OpenCrate',function(ThisCrateData,ItemId)
+RegisterServerEvent('mms-crates:server:OpenCrate',function(CrateId,Inventory)
     local src = source
-    local isregistred = exports.vorp_inventory:isCustomInventoryRegistered(ThisCrateData.crateid)
+    local isregistred = exports.vorp_inventory:isCustomInventoryRegistered(CrateId)
     if isregistred then
-        exports.vorp_inventory:closeInventory(src, ThisCrateData.crateid)
-        exports.vorp_inventory:openInventory(src, ThisCrateData.crateid)
+        exports.vorp_inventory:closeInventory(src, CrateId)
+        exports.vorp_inventory:openInventory(src, CrateId)
     else
         exports.vorp_inventory:registerInventory(
         {
-            id = ThisCrateData.crateid,
+            id = CrateId,
             name = Config.InvetoryName,
-            limit = ThisCrateData.inventory,
+            limit = Inventory,
             acceptWeapons = true,
             shared = true,
             ignoreItemStackLimit = true,
         })
-        exports.vorp_inventory:openInventory(src, ThisCrateData.crateid)
-        isregistred = exports.vorp_inventory:isCustomInventoryRegistered(ThisCrateData.crateid)
+        exports.vorp_inventory:openInventory(src, CrateId)
+        isregistred = exports.vorp_inventory:isCustomInventoryRegistered(CrateId)
     end
 end)
 
-RegisterServerEvent('mms-crates:server:PickupCrate',function(ThisCrateData,ItemId)
+RegisterServerEvent('mms-crates:server:LoadData',function()
     local src = source
-    CrateId = ThisCrateData.crateid
-    if ThisCrateData.size == 1 then
+    local Character = VORPcore.getUser(src).getUsedCharacter
+    local MyCharID = Character.charIdentifier
+    local AllCrateData = MySQL.query.await("SELECT * FROM mms_crates WHERE charidentifier=@charidentifier", { ["charidentifier"] = MyCharID})
+    if #AllCrateData > 0 then
+        TriggerClientEvent('mms-crates:client:PlaceCrateOnStart',src,AllCrateData,MyCharID)
+    end
+end)
+
+RegisterServerEvent('mms-crates:server:PickupCrate',function(CrateId,Size)
+    local src = source
+    if Size == 1 then
         local CanCarry = exports.vorp_inventory:canCarryItem(src, Config.SmallCrateS, 1)
         if CanCarry then
             exports.vorp_inventory:addItem(src, Config.SmallCrateS, 1, { description = _U('CrateID') .. CrateId, cratesid =  CrateId })
         else
             VORPcore.NotifyTip(src,_U('InventoryFull'),5000)
         end
-    elseif ThisCrateData.size == 2 then
+        MySQL.update('UPDATE `mms_crates` SET placed = ? WHERE crateid = ?',{0, CrateId})
+    elseif Size == 2 then
         local CanCarry = exports.vorp_inventory:canCarryItem(src, Config.MediumCrateM, 1)
         if CanCarry then
             exports.vorp_inventory:addItem(src, Config.MediumCrateM, 1, { description = _U('CrateID') .. CrateId, cratesid = CrateId })
         else
             VORPcore.NotifyTip(src,_U('InventoryFull'),5000)
         end
-    elseif ThisCrateData.size == 3 then
+        MySQL.update('UPDATE `mms_crates` SET placed = ? WHERE crateid = ?',{0, CrateId})
+    elseif Size == 3 then
         local CanCarry = exports.vorp_inventory:canCarryItem(src, Config.BigCrateB, 1)
         if CanCarry then
             exports.vorp_inventory:addItem(src, Config.BigCrateB, 1, { description = _U('CrateID') .. CrateId, cratesid =  CrateId })
         else
             VORPcore.NotifyTip(src,_U('InventoryFull'),5000)
         end
+        MySQL.update('UPDATE `mms_crates` SET placed = ? WHERE crateid = ?',{0, CrateId})
     end
 end)
 
-RegisterServerEvent('mms-crates:server:DeleteCrate',function(ThisCrateData,ItemId)
+RegisterServerEvent('mms-crates:server:DeleteCrate',function(CrateId)
     local src = source
-    CrateId = ThisCrateData.crateid
     MySQL.execute('DELETE FROM mms_crates WHERE crateid = ?', {CrateId}, function() end)
 end)
 

@@ -7,11 +7,14 @@ CREATE TABLE `mms_crates` (
 	`model` VARCHAR(50) NOT NULL DEFAULT '0' COLLATE 'armscii8_general_ci',
 	`inventory` INT(11) NOT NULL DEFAULT '0',
 	`size` INT(11) NOT NULL DEFAULT '0',
+	`posx` FLOAT NOT NULL DEFAULT '0',
+	`posy` FLOAT NOT NULL DEFAULT '0',
+	`posz` FLOAT NOT NULL DEFAULT '0',
+	`placed` INT(11) NULL DEFAULT NULL,
 	PRIMARY KEY (`id`) USING BTREE
 )
 COLLATE='armscii8_general_ci'
 ENGINE=InnoDB
-AUTO_INCREMENT=2
 ;
 
 
